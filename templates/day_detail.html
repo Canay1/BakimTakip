@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h1>{{ selected_date|date:"d F Y" }} Günlük Bakım Görevleri</h1>
+    <a href="{% url 'dashboard' %}" class="btn btn-secondary mb-3">← Takvime Dön</a>
+
+    {% if tasks %}
+    <h4 class="mt-4">Bu Günkü Görevler</h4>
+    <table class="table table-striped">
+        <thead><tr><th>Asansör</th><th>Tür</th><th>Atanan</th><th>Durum</th><th>Notlar</th><th>İşlem</th></tr></thead>
+        <tbody>
+        {% for task in tasks %}
+            <tr>
+                <td>{{ task.elevator }}</td>
+                <td>{{ task.get_task_type_display }}</td>
+                <td>{{ task.assigned_to|default:"—" }}</td>
+                <td>{{ task.get_status_display }}</td>
+                <td>{{ task.notes|default:"—" }}</td>
+                <td><a href="{% url 'task_update' task.pk %}" class="btn btn-sm btn-warning">Düzenle</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info">Bu tarihte görev yok.</div>
+    {% endif %}
+
+    <h4 class="mt-5">Yeni Görev Ekle</h4>
+    <form method="post" class="row g-3">
+        {% csrf_token %}
+        {{ form.as_p }}
+        
+        <div class="col-12 mt-4">
+            <button type="submit" class="btn btn-success btn-lg">Görev Ekle / Kaydet</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary">İptal</a>
+        </div>
+
+    </form>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const allDayCheckbox = document.querySelector('#id_all_day');
+        const startInput = document.querySelector('#id_start_datetime');
+        const endInput   = document.querySelector('#id_end_datetime');
+
+        function toggleTimeFields() {
+            if (allDayCheckbox.checked) {
+                // Saat kısımlarını gizle → sadece tarih göster
+                startInput.type = 'date';
+                endInput.type   = 'date';
+                startInput.value = startInput.value.split('T')[0];  // saati sıfırla
+                endInput.value   = endInput.value.split('T')[0];
+            } else {
+                // Normal datetime-local geri getir
+                startInput.type = 'datetime-local';
+                endInput.type   = 'datetime-local';
+            }
+        }
+
+        // Sayfa yüklendiğinde ve checkbox değiştiğinde çalıştır
+        toggleTimeFields();
+        allDayCheckbox.addEventListener('change', toggleTimeFields);
+    });
+    </script>
+</div>
+{% endblock %}

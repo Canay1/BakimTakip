@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">
+        {% if form.instance.pk %}Görev Düzenle{% else %}Yeni Görev Ekle{% endif %}
+    </h2>
+
+    <form method="post" class="row g-3">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <div class="col-12 mt-4">
+            <button type="submit" class="btn btn-success btn-lg">Kaydet</button>
+            <a href="{% url 'tasks' %}" class="btn btn-secondary">İptal</a>
+        </div>
+    </form>
+
+    {% if form.instance.pk and form.instance.elevator and form.instance.elevator.customer %}
+    <div class="mt-4">
+        <button id="notifyToggleBtn" class="btn btn-primary">
+            Müşteriye Bildir
+        </button>
+    </div>
+
+    <!-- Ana Bildirim Paneli -->
+    <div id="notifyPanel" class="mt-3" style="display: none;">
+        <div class="border p-4 rounded bg-light">
+            <h6>Müşteriye Bildirim Gönder</h6>
+            <p><strong>Müşteri:</strong> {{ form.instance.elevator.customer.get_full_name }}</p>
+            
+            <textarea id="customMessage" class="form-control mb-3" rows="5">Sayın {{ form.instance.elevator.customer.get_full_name }}, 
+{{ form.instance.elevator.serial_number }} seri numaralı asansörünüzün {{ form.instance.get_task_type_display|lower }} kaydı alınmıştır. 
+{{ form.instance.start_datetime|date:"d.m.Y H:i" }} tarihinde ekiplerimiz tarafınıza ulaşacaktır.</textarea>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <select id="notifyChannel" class="form-select">
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="email">E-posta</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="phone">Telefon Araması</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-success w-100" onclick="sendNotification({{ form.instance.id }})">
+                        Bildirimi Gönder
+                    </button>
+                </div>
+            </div>
+
+            <!-- TELEFON ARAMASI İÇİN ÖZEL PANEL -->
+            <div id="phoneCallPanel" class="mt-4 border p-3 rounded bg-white" style="display: none;">
+                <h6>Telefon Araması Bilgileri</h6>
+                <p><strong>Telefon Numarası:</strong> <span id="phoneNumberDisplay">{{ form.instance.elevator.customer.phone }}</span></p>
+                <p><strong>Mesaj:</strong> <span id="phoneMessageDisplay"></span></p>
+                
+                <div class="mt-3">
+                    <button class="btn btn-success me-2" onclick="markAsNotified({{ form.instance.id }})">
+                        ✅ Bildirildi
+                    </button>
+                    <button class="btn btn-danger" onclick="markAsNotNotified({{ form.instance.id }})">
+                        ❌ Bildirilmedi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('notifyToggleBtn');
+    const panel = document.getElementById('notifyPanel');
+    const channelSelect = document.getElementById('notifyChannel');
+    const phoneCallPanel = document.getElementById('phoneCallPanel');
+
+    if (toggleBtn && panel) {
+        toggleBtn.addEventListener('click', function() {
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                toggleBtn.textContent = 'Bildirim Panelini Kapat';
+            } else {
+                panel.style.display = 'none';
+                toggleBtn.textContent = 'Müşteriye Bildir';
+                phoneCallPanel.style.display = 'none';
+            }
+        });
+    }
+
+    // Kanal değiştiğinde Telefon Araması seçilirse özel paneli göster
+    if (channelSelect) {
+        channelSelect.addEventListener('change', function() {
+            if (this.value === 'phone') {
+                phoneCallPanel.style.display = 'block';
+                document.getElementById('phoneMessageDisplay').textContent = 
+                    document.getElementById('customMessage').value;
+            } else {
+                phoneCallPanel.style.display = 'none';
+            }
+        });
+    }
+});
+
+function sendNotification(taskId) {
+    const message = document.getElementById('customMessage').value.trim();
+    const channel = document.getElementById('notifyChannel').value;
+
+    if (!message) {
+        alert("Mesaj boş olamaz!");
+        return;
+    }
+
+    if (channel === 'phone') {
+        // Telefon araması seçildiyse özel panel zaten açık
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('channel', channel);
+    formData.append('message', message);
+
+    fetch(`/tasks/${taskId}/notify/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.whatsapp_link) {
+                window.open(data.whatsapp_link, '_blank');
+            } else {
+                alert('Bildirim başarıyla gönderildi!');
+            }
+        } else {
+            alert('Hata: ' + (data.error || 'Gönderilemedi'));
+        }
+    });
+}
+
+// Telefon Araması için özel işaretleme
+function markAsNotified(taskId) {
+    fetch(`/tasks/${taskId}/mark_notified/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(() => {
+        alert('Görev "Bildirildi" olarak işaretlendi.');
+        location.reload();
+    });
+}
+
+function markAsNotNotified(taskId) {
+    fetch(`/tasks/${taskId}/mark_not_notified/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(() => {
+        alert('Görev "Bildirilmedi" olarak işaretlendi.');
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <h1>{% if form.instance.pk %}Müşteri Düzenle{% else %}Yeni Müşteri Ekle{% endif %}</h1>
+    
+    <form method="post" class="row g-3">
+        {% csrf_token %}
+        {{ form.as_p }}
+        
+        <div class="col-12 mt-4">
+            <button type="submit" class="btn btn-success">Kaydet</button>
+            <a href="{% url 'customers' %}" class="btn btn-secondary">İptal</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

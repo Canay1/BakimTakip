@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Stok Yönetimi</h1>
+<a href="{% url 'part_create' %}" class="btn btn-primary mb-3">Yeni Parça Ekle</a>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>
+                <a href="?order_by=part_code&direction={% if current_order == 'part_code' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Parça Kodu
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=name&direction={% if current_order == 'name' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Parça Adı
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=quantity&direction={% if current_order == 'quantity' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Stok
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=min_stock&direction={% if current_order == 'min_stock' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Kritik Seviye
+                </a>
+            </th>
+            <th>İşlemler</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for part in parts %}
+        <tr class="{% if part.is_critical %}table-danger{% endif %}">
+            <td>{{ part.part_code }}</td>
+            <td>{{ part.name }}</td>
+            <td>{{ part.quantity }}</td>
+            <td>{{ part.min_stock }}</td>
+            <td>
+                <a href="{% url 'part_update' part.pk %}" class="btn btn-sm btn-warning">Düzenle</a>
+                
+                <form method="post" action="{% url 'part_delete' part.pk %}" style="display: inline-block;">
+                    {% csrf_token %}
+                    <button type="submit" 
+                            class="btn btn-sm btn-danger"
+                            onclick="return confirm('Bu parçayı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!');">
+                        Sil
+                    </button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

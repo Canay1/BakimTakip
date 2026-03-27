@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Toplam Asansör</h5>
+                <p class="card-text fs-3 fw-bold">{{ elevators }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-warning shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Bekleyen Görev</h5>
+                <p class="card-text fs-3 fw-bold">{{ pending_tasks }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger shadow-sm">
+            <div class="card-body text-center">
+                <h5 class="card-title">Kritik Stok</h5>
+                <p class="card-text fs-3 fw-bold">{{ critical_parts }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mt-5 mb-3">Bakım Takvimi</h3>
+<div id="calendar" style="max-width: 100%; height: 650px;"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch("{% url 'task_api' %}?_=" + new Date().getTime(), { cache: 'no-store' })
+        .then(response => {
+            if (!response.ok) throw new Error('API yanıtı hatalı: ' + response.status);
+            return response.json();
+        })
+        .then(data => {
+            const calendarEl = document.getElementById('calendar');
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'tr',
+                timeZone: 'Europe/Istanbul',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                weekNumbers: true,
+                allDaySlot: true,
+                height: 'auto',
+                editable: false,
+                selectable: false,
+
+                events: data.map(task => {
+                    let event = {
+                        id: task.id,
+                        title: `${task.elevator.serial_number || task.elevator || 'Asansör'} - ${task.task_type_display || task.task_type || 'Görev'}`,
+                        color: task.status === 'pending' ? '#dc3545' : '#198754',
+                        extendedProps: { taskId: task.id }
+                    };
+
+                    if (task.all_day) {
+                        event.allDay = true;
+                        
+                        // Başlangıç tarihi
+                        let startStr = task.start_datetime ? task.start_datetime.split('T')[0] : task.due_date;
+                        event.start = startStr;
+
+                        // Bitiş tarihi
+                        let endSource = task.end_datetime ? task.end_datetime.split('T')[0] : startStr;
+                        
+                        if (endSource) {
+                            let endDate = new Date(endSource);
+                            // FullCalendar'da AllDay bitiş günü 'exclusive'dir. 
+                            // 13'ünü de dolu görmek için tarihe +1 gün ekliyoruz.
+                            endDate.setDate(endDate.getDate() + 1);
+                            event.end = endDate.toISOString().split('T')[0];
+                        }
+                    } else {
+                        // Normal (saatli) görev mantığı
+                        event.allDay = false;
+                        event.start = task.start_datetime || (task.due_date + 'T09:00:00');
+                        
+                        if (task.end_datetime) {
+                            event.end = task.end_datetime;
+                        } else {
+                            const startDate = new Date(event.start);
+                            const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+                            event.end = endDate.toISOString();
+                        }
+                    }
+
+                    return event;
+                }),
+
+                dateClick: function(info) {
+                    let dateStr = info.dateStr;
+                    if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+                    window.location.href = `/calendar/day/${dateStr}/`;
+                },
+
+                eventClick: function(info) {
+                    const taskId = info.event.extendedProps?.taskId;
+                    if (taskId) {
+                        window.location.href = `/tasks/${taskId}/update/`;
+                    }
+                }
+            });
+
+            calendar.render();
+        })
+        .catch(error => console.error('Takvim verisi alınamadı:', error));
+});
+</script>
+{% endblock %}

@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Bakım Görevleri</h1>
+<a href="{% url 'task_create' %}" class="btn btn-primary mb-3">Yeni Görev Ekle</a>
+
+<table class="table table-striped" id="tasksTable">
+    <thead>
+        <tr>
+            <th>
+                <a href="?order_by=elevator__serial_number&direction={% if current_order == 'elevator__serial_number' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Asansör
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=task_type&direction={% if current_order == 'task_type' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    İş Türü
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=start_datetime&direction={% if current_order == 'start_datetime' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Başlangıç Tarih/Saati
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=end_datetime&direction={% if current_order == 'end_datetime' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Bitiş Tarih/Saati
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=assigned_to__username&direction={% if current_order == 'assigned_to__username' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Atanan
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=notification_sent&direction={% if current_order == 'notification_sent' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Bildirim Durumu
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=status&direction={% if current_order == 'status' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Durum
+                </a>
+            </th>
+            <th>İşlemler</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for task in tasks %}
+        <tr id="task-row-{{ task.id }}">
+            <td>{{ task.elevator }}</td>
+            <td>{{ task.get_task_type_display }}</td>
+            <td>{{ task.start_datetime|date:"d.m.Y H:i" }}</td>
+            <td>{{ task.end_datetime|date:"d.m.Y H:i" }}</td>
+            <td>{{ task.assigned_to|default:"—" }}</td>
+            <td>
+                {% if task.notification_sent %}
+                    <span class="badge bg-success">Evet</span>
+                {% else %}
+                    <span class="badge bg-warning">Hayır</span>
+                {% endif %}
+            </td>
+            <td>{{ task.get_status_display }}</td>
+            <td>
+                <a href="{% url 'task_update' task.pk %}" class="btn btn-sm btn-warning">Düzenle</a>
+
+
+
+                <form method="post" action="{% url 'task_delete' task.pk %}" style="display: inline-block;">
+                    {% csrf_token %}
+                    <button type="submit" 
+                            class="btn btn-danger btn-sm"
+                            onclick="return confirm('Bu görevi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!')">
+                        Sil
+                    </button>
+                </form>            
+                
+                
+                
+                {% if task.elevator.customer %}
+                <button class="btn btn-sm btn-primary notify-btn" 
+                        data-task-id="{{ task.id }}">
+                    Müşteriye Bildir
+                </button>
+                {% endif %}
+            </td>
+        </tr>
+
+        <!-- Mesaj Paneli -->
+        <tr id="notify-panel-{{ task.id }}" class="notify-panel" style="display: none;">
+            <td colspan="8" class="bg-light p-3">
+                <div class="border p-3 rounded">
+                    <h6>Müşteriye Bildirim Gönder</h6>
+                    <p><strong>Müşteri:</strong> {{ task.elevator.customer.get_full_name }}</p>
+                    
+                    <textarea id="message-{{ task.id }}" class="form-control mb-3" rows="4">
+Sayın {{ task.elevator.customer.get_full_name }}, 
+{{ task.elevator.serial_number }} seri numaralı asansörünüzün {{ task.get_task_type_display|lower }} kaydı alınmıştır. 
+{{ task.start_datetime|date:"d.m.Y H:i" }} tarihinde ekiplerimiz tarafınıza ulaşacaktır.
+                    </textarea>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <select id="channel-{{ task.id }}" class="form-select">
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="email">E-posta</option>
+                                <option value="telegram">Telegram</option>
+                                <option value="phone">Telefon Araması</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-success w-100" 
+                                    onclick="sendNotification({{ task.id }})">
+                                Bildirimi Gönder
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TELEFON ARAMASI İÇİN ÖZEL PANEL -->
+                    <div id="phoneCallPanel-{{ task.id }}" class="mt-4 border p-3 rounded bg-white" style="display: none;">
+                        <h6>Telefon Araması Bilgileri</h6>
+                        <p><strong>Telefon Numarası:</strong> {{ task.elevator.customer.phone }}</p>
+                        <p><strong>Mesaj:</strong> <span id="phoneMessage-{{ task.id }}"></span></p>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-success me-2" onclick="markAsNotified({{ task.id }})">
+                                ✅ Bildirildi
+                            </button>
+                            <button class="btn btn-danger" onclick="markAsNotNotified({{ task.id }})">
+                                ❌ Bildirilmedi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentOpenPanel = null;
+
+    document.querySelectorAll('.notify-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const taskId = this.getAttribute('data-task-id');
+            const panel = document.getElementById('notify-panel-' + taskId);
+
+            if (currentOpenPanel && currentOpenPanel !== panel) {
+                currentOpenPanel.style.display = 'none';
+            }
+
+            if (panel.style.display === 'none' || panel.style.display === '') {
+                panel.style.display = 'table-row';
+                currentOpenPanel = panel;
+            } else {
+                panel.style.display = 'none';
+                currentOpenPanel = null;
+            }
+        });
+    });
+
+    // Kanal değiştiğinde Telefon Araması panelini göster/gizle
+    document.querySelectorAll('.form-select[id^="channel-"]').forEach(select => {
+        select.addEventListener('change', function() {
+            const taskId = this.id.split('-')[1];
+            const phonePanel = document.getElementById('phoneCallPanel-' + taskId);
+            const message = document.getElementById('message-' + taskId).value;
+
+            if (this.value === 'phone') {
+                phonePanel.style.display = 'block';
+                document.getElementById('phoneMessage-' + taskId).textContent = message;
+            } else {
+                phonePanel.style.display = 'none';
+            }
+        });
+    });
+});
+
+function sendNotification(taskId) {
+    const message = document.getElementById('message-' + taskId).value.trim();
+    const channel = document.getElementById('channel-' + taskId).value;
+
+    if (!message) {
+        alert("Mesaj boş olamaz!");
+        return;
+    }
+
+    if (channel === 'phone') {
+        // Telefon araması için özel panel zaten açık
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('channel', channel);
+    formData.append('message', message);
+
+    fetch(`/tasks/${taskId}/notify/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.whatsapp_link) {
+                window.open(data.whatsapp_link, '_blank');
+            } else {
+                alert('Bildirim başarıyla gönderildi!');
+                location.reload();
+            }
+        } else {
+            alert('Hata: ' + (data.error || 'Gönderilemedi'));
+        }
+    });
+}
+
+// Telefon Araması işaretleme fonksiyonları
+function markAsNotified(taskId) {
+    fetch(`/tasks/${taskId}/mark_notified/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(() => {
+        alert('Görev "Bildirildi" olarak işaretlendi.');
+        location.reload();
+    });
+}
+
+function markAsNotNotified(taskId) {
+    fetch(`/tasks/${taskId}/mark_not_notified/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(() => {
+        alert('Görev "Bildirilmedi" olarak işaretlendi.');
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

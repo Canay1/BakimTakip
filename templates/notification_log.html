@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Bildirim Logları</h1>
+
+<table class="table table-striped" id="notificationTable">
+    <thead>
+        <tr>
+            <th>
+                <a href="?order_by=sent_at&direction={% if current_order == 'sent_at' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Tarih
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=customer__first_name&direction={% if current_order == 'customer__first_name' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Müşteri
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=channel&direction={% if current_order == 'channel' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Kanal
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=message&direction={% if current_order == 'message' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Mesaj
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=status&direction={% if current_order == 'status' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Durum
+                </a>
+            </th>
+            <th>
+                <a href="?order_by=is_read&direction={% if current_order == 'is_read' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                    Okundu mu?
+                </a>
+            </th>
+            <th>İşlemler</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for log in logs %}
+        <tr class="notification-row" 
+            data-notification-type="{{ log.notification_type|default:'' }}"
+            data-object-id="{{ log.object_id|default:'' }}"
+            style="cursor: pointer;">
+            
+            <td>{{ log.sent_at|date:"d.m.Y H:i" }}</td>
+            <td>{{ log.customer|default:"—" }}</td>
+            <td>{{ log.get_channel_display|default:"—" }}</td>
+            <td>{{ log.message|truncatewords:20 }}</td>
+            <td>
+                {% if log.status == 'success' %}
+                    <span class="badge bg-success">Başarılı</span>
+                {% else %}
+                    <span class="badge bg-danger">Başarısız</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if log.is_read %}
+                    <span class="badge bg-secondary">Okundu</span>
+                {% else %}
+                    <span class="badge bg-primary">Okunmadı</span>
+                {% endif %}
+            </td>
+            <td>
+                <form method="post" action="{% url 'notification_log_delete' log.pk %}" style="display: inline-block;" 
+                      onclick="event.stopImmediatePropagation();">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger"
+                            onclick="return confirm('Bu bildirimi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!');">
+                        Sil
+                    </button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<script>
+// Event Delegation - Daha güvenilir yöntem
+document.addEventListener('click', function(e) {
+    const row = e.target.closest('.notification-row');
+    
+    // Eğer sil butonuna tıklandıysa hiçbir şey yapma
+    if (e.target.closest('form') || e.target.closest('button')) {
+        return;
+    }
+
+    if (row) {
+        const notificationType = row.getAttribute('data-notification-type');
+        const objectId = row.getAttribute('data-object-id');
+
+        console.log('🔍 Tıklanan satır → Tip:', notificationType, '| Object ID:', objectId);
+
+        if (notificationType === 'task_reminder' && objectId) {
+            console.log('→ Göreve yönlendiriliyor: /tasks/' + objectId + '/update/');
+            window.location.href = `/tasks/${objectId}/update/`;
+        } 
+        else if (notificationType === 'critical_stock' && objectId) {
+            console.log('→ Parçaya yönlendiriliyor: /parts/' + objectId + '/update/');
+            window.location.href = `/parts/${objectId}/update/`;
+        } 
+        else {
+            console.warn('⚠️ Bu bildirim için yönlendirme tanımlı değil veya object_id eksik.');
+        }
+    }
+});
+
+console.log('Notification Log sayfası yüklendi. Event delegation aktif.');
+</script>
+
+
+
+
+
+
+{% endblock %}
+

@@ -1,0 +1,61 @@
+<div class="modal-dialog modal-lg">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Müşteriye Bildirim Gönder</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <strong>Müşteri:</strong> {{ customer.get_full_name }}<br>
+                <strong>Asansör:</strong> {{ task.elevator.serial_number }}
+            </div>
+
+            <label class="form-label">Mesaj (Düzenleyebilirsiniz)</label>
+            <textarea id="customMessage" class="form-control" rows="5">{{ default_message }}</textarea>
+
+            <label class="form-label mt-3">İletişim Kanalı</label>
+            <select id="notifyChannel" class="form-select">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">E-posta</option>
+                <option value="telegram">Telegram</option>
+                <option value="phone">Telefon Araması</option>
+            </select>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+            <button type="button" class="btn btn-success" onclick="sendCustomerNotification({{ task.id }})">
+                Bildirimi Gönder
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function sendCustomerNotification(taskId) {
+    const message = document.getElementById('customMessage').value;
+    const channel = document.getElementById('notifyChannel').value;
+
+    const formData = new FormData();
+    formData.append('channel', channel);
+    formData.append('message', message);
+
+    fetch(`/tasks/${taskId}/notify/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.whatsapp_link) {
+                window.open(data.whatsapp_link, '_blank');
+            } else {
+                alert('Bildirim başarıyla gönderildi!');
+            }
+            location.reload();
+        } else {
+            alert('Hata: ' + (data.error || 'Bildirim gönderilemedi.'));
+        }
+    });
+}
+</script>
